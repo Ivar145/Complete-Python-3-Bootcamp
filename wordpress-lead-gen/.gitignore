@@ -1,0 +1,5 @@
+.env
+*.db
+leads_*.csv
+__pycache__/
+*.pyc
