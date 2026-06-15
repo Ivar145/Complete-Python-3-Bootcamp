@@ -9,6 +9,8 @@ import csv
 import os
 import time
 from datetime import datetime
+from typing import Callable, Optional
+
 
 import requests
 
@@ -37,9 +39,23 @@ def get_place_details(place_id: str, api_key: str) -> dict:
     return response.json().get("result", {})
 
 
-def find_leads(location: str, category: str, api_key: str, max_results: int = 60) -> list[dict]:
+def find_leads(
+    location: str,
+    category: str,
+    api_key: str,
+    max_results: int = 60,
+    include_with_website: bool = False,
+    progress_callback: Optional[Callable[[str, int, int], None]] = None,
+) -> list[dict]:
     query = f"{category} in {location}"
-    print(f"Searching: {query}")
+
+    def log(message: str, current: int = 0, total: int = 0):
+        if progress_callback:
+            progress_callback(message, current, total)
+        else:
+            print(message)
+
+    log(f"Searching: {query}", 0, max_results)
 
     leads = []
     checked = 0
@@ -50,7 +66,7 @@ def find_leads(location: str, category: str, api_key: str, max_results: int = 60
         status = data.get("status")
 
         if status not in ("OK", "ZERO_RESULTS"):
-            print(f"API error: {status} — {data.get('error_message', '')}")
+            log(f"API error: {status} — {data.get('error_message', '')}", checked, max_results)
             break
 
         results = data.get("results", [])
@@ -64,54 +80,57 @@ def find_leads(location: str, category: str, api_key: str, max_results: int = 60
             checked += 1
             place_id = place["place_id"]
             name = place.get("name", "")
-            print(f"  [{checked}] Checking: {name} ...", end=" ", flush=True)
 
             details = get_place_details(place_id, api_key)
 
-            # Skip permanently closed businesses
             if details.get("business_status") == "CLOSED_PERMANENTLY":
-                print("closed, skipping")
+                log(f"[{checked}/{max_results}] {name} — closed, skipping", checked, max_results)
                 continue
 
             website = details.get("website", "")
-            if not website:
-                print("NO WEBSITE ✓")
-                leads.append({
-                    "name": details.get("name", name),
-                    "address": details.get("formatted_address", place.get("formatted_address", "")),
-                    "phone": details.get("formatted_phone_number", ""),
-                    "google_maps_url": details.get("url", f"https://maps.google.com/?place_id={place_id}"),
-                    "category": category,
-                    "location": location,
-                })
-            else:
-                print(f"has website ({website[:40]}...)" if len(website) > 40 else f"has website ({website})")
+            lead = {
+                "name": details.get("name", name),
+                "address": details.get("formatted_address", place.get("formatted_address", "")),
+                "phone": details.get("formatted_phone_number", ""),
+                "website": website,
+                "google_maps_url": details.get("url", f"https://maps.google.com/?place_id={place_id}"),
+                "category": category,
+                "location": location,
+            }
 
-            # Respect API rate limits
+            if not website:
+                log(f"[{checked}/{max_results}] {name} — NO WEBSITE", checked, max_results)
+                leads.append(lead)
+            elif include_with_website:
+                log(f"[{checked}/{max_results}] {name} — has website", checked, max_results)
+                leads.append(lead)
+            else:
+                log(f"[{checked}/{max_results}] {name} — has website, skipping", checked, max_results)
+
             time.sleep(0.1)
 
         page_token = data.get("next_page_token")
         if not page_token:
             break
 
-        # next_page_token needs a short delay before it becomes valid
         time.sleep(2)
 
     return leads
 
 
 def save_to_csv(leads: list[dict], output_path: str):
-    if not leads:
+    no_website = [l for l in leads if not l.get("website")]
+    if not no_website:
         print("\nNo leads found with missing websites.")
         return
 
-    fieldnames = ["name", "category", "address", "phone", "google_maps_url", "location"]
+    fieldnames = ["name", "category", "address", "phone", "website", "google_maps_url", "location"]
     with open(output_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
-        writer.writerows(leads)
+        writer.writerows(no_website)
 
-    print(f"\nSaved {len(leads)} leads to: {output_path}")
+    print(f"\nSaved {len(no_website)} leads to: {output_path}")
 
 
 def main():
@@ -134,7 +153,8 @@ def main():
     output_path = os.path.join(os.path.dirname(__file__), output_file)
     save_to_csv(leads, output_path)
 
-    print(f"\nSummary: {len(leads)} businesses found with no website out of {args.max} checked.")
+    no_website_count = sum(1 for l in leads if not l.get("website"))
+    print(f"\nSummary: {no_website_count} businesses found with no website out of {args.max} checked.")
 
 
 if __name__ == "__main__":
