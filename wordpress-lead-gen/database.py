@@ -226,7 +226,7 @@ def add_lead(lead_dict: dict) -> int:
         return cursor.lastrowid
 
 
-def get_leads(status: str = None, priority: int = None, search: str = None) -> list:
+def get_leads(status: str = None, priority: int = None, search: str = None, category: str = None) -> list:
     query = "SELECT * FROM leads WHERE 1=1"
     params = []
 
@@ -236,6 +236,9 @@ def get_leads(status: str = None, priority: int = None, search: str = None) -> l
     if priority:
         query += " AND priority = ?"
         params.append(priority)
+    if category:
+        query += " AND category = ?"
+        params.append(category)
     if search:
         query += " AND (name LIKE ? OR address LIKE ?)"
         params.extend([f"%{search}%", f"%{search}%"])
@@ -245,6 +248,14 @@ def get_leads(status: str = None, priority: int = None, search: str = None) -> l
     with get_conn() as conn:
         rows = conn.execute(query, params).fetchall()
         return [dict(row) for row in rows]
+
+
+def get_categories() -> list[str]:
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT DISTINCT category FROM leads WHERE category != '' ORDER BY category"
+        ).fetchall()
+        return [row["category"] for row in rows]
 
 
 def get_lead(lead_id: int) -> dict:

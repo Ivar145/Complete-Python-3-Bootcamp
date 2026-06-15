@@ -9,6 +9,7 @@ from database import (
     delete_lead,
     delete_template,
     get_all_settings,
+    get_categories,
     get_email_log,
     get_lead,
     get_leads,
@@ -243,6 +244,8 @@ with tab2:
         priority_filter = st.selectbox(
             "Priority", ["All", "P1 - No Website", "P2 - Poor SEO"]
         )
+        categories = get_categories()
+        category_filter = st.selectbox("Category", ["All"] + categories)
 
         status_map = {
             "All": None,
@@ -258,6 +261,7 @@ with tab2:
         leads = get_leads(
             status=status_map[status_filter],
             priority=priority_map[priority_filter],
+            category=None if category_filter == "All" else category_filter,
             search=search_query or None,
         )
 
@@ -265,7 +269,8 @@ with tab2:
         for lead in leads:
             label = STATUS_LABELS.get(lead["status"], lead["status"])
             priority_icon = "🔴" if lead["priority"] == 1 else "🟡"
-            btn_label = f"{priority_icon} {lead['name']}  {label}"
+            cat = f"[{lead['category']}]  " if lead.get("category") else ""
+            btn_label = f"{priority_icon} {lead['name']}  {cat}{label}"
             if st.button(btn_label, key=f"lead_btn_{lead['id']}", use_container_width=True):
                 st.session_state["selected_lead_id"] = lead["id"]
                 st.session_state.pop("confirm_delete", None)
