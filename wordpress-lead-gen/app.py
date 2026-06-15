@@ -139,6 +139,8 @@ with tab1:
 
             st.session_state["finder_p1"] = priority1
             st.session_state["finder_p2"] = priority2
+            st.session_state["added_p1"] = set()
+            st.session_state["added_p2"] = set()
             st.success(
                 f"Done! Found {len(priority1)} businesses with no website and {len(priority2)} with poor SEO."
             )
@@ -160,16 +162,28 @@ with tab1:
             else:
                 if st.button("Add All to Tracker", key="add_all_p1"):
                     add_all(priority1)
+                    st.session_state["added_p1"] = set(range(len(priority1)))
+                    st.rerun()
 
+                added_p1 = st.session_state.get("added_p1", set())
                 for i, lead in enumerate(priority1):
                     c1, c2 = st.columns([4, 1])
-                    with c1:
-                        st.markdown(f"**{lead['name']}**")
-                        st.caption(f"{lead.get('address', '')} · {lead.get('phone', '') or 'No phone'}")
-                    with c2:
-                        if st.button("Add to Tracker", key=f"add_p1_{i}"):
-                            add_lead(lead)
-                            st.success("Added!")
+                    if i in added_p1:
+                        with c1:
+                            st.markdown(f"~~{lead['name']}~~")
+                            st.caption(f"{lead.get('address', '')} · {lead.get('phone', '') or 'No phone'}")
+                        with c2:
+                            st.markdown("✅ Added")
+                    else:
+                        with c1:
+                            st.markdown(f"**{lead['name']}**")
+                            st.caption(f"{lead.get('address', '')} · {lead.get('phone', '') or 'No phone'}")
+                        with c2:
+                            if st.button("Add to Tracker", key=f"add_p1_{i}"):
+                                add_lead(lead)
+                                added_p1.add(i)
+                                st.session_state["added_p1"] = added_p1
+                                st.rerun()
                     st.divider()
 
         with st.expander(f"Priority 2 — Poor SEO ({len(priority2)} found)", expanded=True):
@@ -178,20 +192,32 @@ with tab1:
             else:
                 if st.button("Add All to Tracker", key="add_all_p2"):
                     add_all(priority2)
+                    st.session_state["added_p2"] = set(range(len(priority2)))
+                    st.rerun()
 
+                added_p2 = st.session_state.get("added_p2", set())
                 for i, lead in enumerate(priority2):
                     c1, c2 = st.columns([4, 1])
-                    with c1:
-                        st.markdown(f"**{lead['name']}** — SEO Score: {lead.get('seo_score', 'N/A')}")
-                        st.caption(f"{lead.get('address', '')} · {lead.get('phone', '') or 'No phone'}")
-                        issues = json.loads(lead.get("seo_issues") or "[]")
-                        if issues:
-                            for issue in issues:
-                                st.caption(f"⚠ {issue}")
-                    with c2:
-                        if st.button("Add to Tracker", key=f"add_p2_{i}"):
-                            add_lead(lead)
-                            st.success("Added!")
+                    if i in added_p2:
+                        with c1:
+                            st.markdown(f"~~{lead['name']}~~ — SEO Score: {lead.get('seo_score', 'N/A')}")
+                            st.caption(f"{lead.get('address', '')} · {lead.get('phone', '') or 'No phone'}")
+                        with c2:
+                            st.markdown("✅ Added")
+                    else:
+                        with c1:
+                            st.markdown(f"**{lead['name']}** — SEO Score: {lead.get('seo_score', 'N/A')}")
+                            st.caption(f"{lead.get('address', '')} · {lead.get('phone', '') or 'No phone'}")
+                            issues = json.loads(lead.get("seo_issues") or "[]")
+                            if issues:
+                                for issue in issues:
+                                    st.caption(f"⚠ {issue}")
+                        with c2:
+                            if st.button("Add to Tracker", key=f"add_p2_{i}"):
+                                add_lead(lead)
+                                added_p2.add(i)
+                                st.session_state["added_p2"] = added_p2
+                                st.rerun()
                     st.divider()
 
 
@@ -238,7 +264,8 @@ with tab2:
         st.markdown(f"**{len(leads)} leads**")
         for lead in leads:
             label = STATUS_LABELS.get(lead["status"], lead["status"])
-            btn_label = f"{lead['name']}  {label}"
+            priority_icon = "🔴" if lead["priority"] == 1 else "🟡"
+            btn_label = f"{priority_icon} {lead['name']}  {label}"
             if st.button(btn_label, key=f"lead_btn_{lead['id']}", use_container_width=True):
                 st.session_state["selected_lead_id"] = lead["id"]
                 st.session_state.pop("confirm_delete", None)
