@@ -151,6 +151,8 @@ with tab1:
             st.session_state["finder_p2"] = priority2
             st.session_state["added_p1"] = set()
             st.session_state["added_p2"] = set()
+            st.session_state["added_passed"] = set()
+            st.session_state["added_blocked"] = set()
             st.success(
                 f"Done! Found {len(priority1)} businesses with no website and {len(priority2)} with poor SEO."
             )
@@ -257,6 +259,9 @@ with tab1:
                         with c1:
                             st.markdown(f"**{lead['name']}** — SEO Score: {lead.get('seo_score', 'N/A')}")
                             st.caption(f"{lead.get('address', '')} · {lead.get('website', '')}")
+                            issues = json.loads(lead.get("seo_issues") or "[]")
+                            for issue in issues:
+                                st.caption(f"⚠ {issue}")
                         with c2:
                             if st.button("Add to Tracker", key=f"add_passed_{i}"):
                                 add_lead(lead)
