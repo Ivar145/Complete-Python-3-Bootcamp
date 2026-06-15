@@ -69,6 +69,7 @@ DEFAULT_SETTINGS = {
     "gmail_app_password": "",
     "google_places_api_key": "",
     "follow_up_days": "14",
+    "seo_threshold": "70",
 }
 
 

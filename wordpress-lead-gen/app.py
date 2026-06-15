@@ -114,9 +114,11 @@ with tab1:
             priority1 = []
             priority2 = []
 
+            seo_threshold = int(get_setting("seo_threshold") or 70)
             seo_progress = st.progress(0)
             seo_status = st.empty()
             with_website = [l for l in raw_leads if l.get("website")]
+            passed_seo = []
 
             for i, lead in enumerate(with_website):
                 seo_status.text(f"Checking SEO: {lead['name']} ({i + 1}/{len(with_website)})")
@@ -124,12 +126,16 @@ with tab1:
                 result = check_seo(lead["website"])
                 lead["seo_score"] = result["score"]
                 lead["seo_issues"] = json.dumps(result["issues"])
-                if result["score"] < 60:
+                if result["score"] < seo_threshold:
                     lead["priority"] = 2
                     priority2.append(lead)
+                else:
+                    lead["priority"] = 2
+                    passed_seo.append(lead)
 
             seo_progress.empty()
             seo_status.empty()
+            st.session_state["finder_passed"] = passed_seo
 
             for lead in raw_leads:
                 if not lead.get("website"):
@@ -149,6 +155,7 @@ with tab1:
     if "finder_p1" in st.session_state or "finder_p2" in st.session_state:
         priority1 = st.session_state.get("finder_p1", [])
         priority2 = st.session_state.get("finder_p2", [])
+        passed_seo = st.session_state.get("finder_passed", [])
 
         def add_all(leads_list):
             count = 0
@@ -218,6 +225,39 @@ with tab1:
                                 add_lead(lead)
                                 added_p2.add(i)
                                 st.session_state["added_p2"] = added_p2
+                                st.rerun()
+                    st.divider()
+
+        seo_threshold = int(get_setting("seo_threshold") or 70)
+        with st.expander(f"Passed SEO — score ≥ {seo_threshold} ({len(passed_seo)} found)", expanded=False):
+            if not passed_seo:
+                st.info("No businesses passed the SEO threshold.")
+            else:
+                st.caption("These sites passed the automated check. Add manually if you know their SEO is poor.")
+                if st.button("Add All to Tracker", key="add_all_passed"):
+                    for lead in passed_seo:
+                        add_lead(lead)
+                    st.session_state["added_passed"] = set(range(len(passed_seo)))
+                    st.rerun()
+
+                added_passed = st.session_state.get("added_passed", set())
+                for i, lead in enumerate(passed_seo):
+                    c1, c2 = st.columns([4, 1])
+                    if i in added_passed:
+                        with c1:
+                            st.markdown(f"~~{lead['name']}~~ — SEO Score: {lead.get('seo_score', 'N/A')}")
+                            st.caption(f"{lead.get('address', '')} · {lead.get('phone', '') or 'No phone'}")
+                        with c2:
+                            st.markdown("✅ Added")
+                    else:
+                        with c1:
+                            st.markdown(f"**{lead['name']}** — SEO Score: {lead.get('seo_score', 'N/A')}")
+                            st.caption(f"{lead.get('address', '')} · {lead.get('website', '')}")
+                        with c2:
+                            if st.button("Add to Tracker", key=f"add_passed_{i}"):
+                                add_lead(lead)
+                                added_passed.add(i)
+                                st.session_state["added_passed"] = added_passed
                                 st.rerun()
                     st.divider()
 
@@ -607,6 +647,13 @@ with tab5:
             max_value=90,
             step=1,
         )
+        seo_threshold = st.number_input(
+            "SEO Threshold — sites scoring below this are flagged as Poor SEO (0–100)",
+            value=int(settings.get("seo_threshold") or 70),
+            min_value=10,
+            max_value=100,
+            step=5,
+        )
 
         if st.form_submit_button("Save Settings", type="primary"):
             save_setting("your_name", your_name)
@@ -614,6 +661,7 @@ with tab5:
             save_setting("gmail_app_password", gmail_app_password)
             save_setting("google_places_api_key", google_places_api_key)
             save_setting("follow_up_days", str(int(follow_up_days)))
+            save_setting("seo_threshold", str(int(seo_threshold)))
             st.success("Settings saved!")
 
     st.divider()
