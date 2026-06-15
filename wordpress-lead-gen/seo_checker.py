@@ -20,11 +20,19 @@ def check_seo(url: str) -> dict:
         response = requests.get(url, timeout=15, headers={"User-Agent": "Mozilla/5.0"}, allow_redirects=True)
         elapsed = time.time() - start
     except requests.exceptions.ConnectionError:
-        return {"score": 0, "issues": ["Could not connect to website"], "issue_summary": "Connection failed"}
+        return {"score": 0, "issues": ["Could not connect to website"], "issue_summary": "Connection failed", "blocked": True}
     except requests.exceptions.Timeout:
-        return {"score": 0, "issues": ["Website timed out after 15 seconds"], "issue_summary": "Connection timed out"}
+        return {"score": 0, "issues": ["Website timed out after 15 seconds"], "issue_summary": "Connection timed out", "blocked": True}
     except Exception as e:
-        return {"score": 0, "issues": [f"Error loading website: {str(e)}"], "issue_summary": str(e)}
+        return {"score": 0, "issues": [f"Error loading website: {str(e)}"], "issue_summary": str(e), "blocked": True}
+
+    if response.status_code in (403, 401, 429):
+        return {
+            "score": 0,
+            "issues": [f"Site blocked automated access (HTTP {response.status_code}) — SEO unknown, review manually"],
+            "issue_summary": f"Blocked (HTTP {response.status_code})",
+            "blocked": True,
+        }
 
     if elapsed > 5:
         score -= 20

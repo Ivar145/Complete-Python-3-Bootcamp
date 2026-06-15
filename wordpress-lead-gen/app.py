@@ -119,6 +119,7 @@ with tab1:
             seo_status = st.empty()
             with_website = [l for l in raw_leads if l.get("website")]
             passed_seo = []
+            blocked_seo = []
 
             for i, lead in enumerate(with_website):
                 seo_status.text(f"Checking SEO: {lead['name']} ({i + 1}/{len(with_website)})")
@@ -126,16 +127,18 @@ with tab1:
                 result = check_seo(lead["website"])
                 lead["seo_score"] = result["score"]
                 lead["seo_issues"] = json.dumps(result["issues"])
-                if result["score"] < seo_threshold:
-                    lead["priority"] = 2
+                lead["priority"] = 2
+                if result.get("blocked"):
+                    blocked_seo.append(lead)
+                elif result["score"] < seo_threshold:
                     priority2.append(lead)
                 else:
-                    lead["priority"] = 2
                     passed_seo.append(lead)
 
             seo_progress.empty()
             seo_status.empty()
             st.session_state["finder_passed"] = passed_seo
+            st.session_state["finder_blocked"] = blocked_seo
 
             for lead in raw_leads:
                 if not lead.get("website"):
@@ -156,6 +159,7 @@ with tab1:
         priority1 = st.session_state.get("finder_p1", [])
         priority2 = st.session_state.get("finder_p2", [])
         passed_seo = st.session_state.get("finder_passed", [])
+        blocked_seo = st.session_state.get("finder_blocked", [])
 
         def add_all(leads_list):
             count = 0
@@ -258,6 +262,41 @@ with tab1:
                                 add_lead(lead)
                                 added_passed.add(i)
                                 st.session_state["added_passed"] = added_passed
+                                st.rerun()
+                    st.divider()
+
+        with st.expander(f"⚠ Could Not Check SEO ({len(blocked_seo)} found)", expanded=False):
+            if not blocked_seo:
+                st.info("All sites with websites were reachable.")
+            else:
+                st.caption("These sites blocked the SEO checker. Review them manually — blocking scrapers can itself be a sign of poor technical setup.")
+                if st.button("Add All to Tracker", key="add_all_blocked"):
+                    for lead in blocked_seo:
+                        add_lead(lead)
+                    st.session_state["added_blocked"] = set(range(len(blocked_seo)))
+                    st.rerun()
+
+                added_blocked = st.session_state.get("added_blocked", set())
+                for i, lead in enumerate(blocked_seo):
+                    c1, c2 = st.columns([4, 1])
+                    if i in added_blocked:
+                        with c1:
+                            st.markdown(f"~~{lead['name']}~~")
+                            st.caption(lead.get("website", ""))
+                        with c2:
+                            st.markdown("✅ Added")
+                    else:
+                        with c1:
+                            st.markdown(f"**{lead['name']}**")
+                            st.caption(f"{lead.get('website', '')} · {lead.get('address', '')}")
+                            issues = json.loads(lead.get("seo_issues") or "[]")
+                            for issue in issues:
+                                st.caption(f"⚠ {issue}")
+                        with c2:
+                            if st.button("Add to Tracker", key=f"add_blocked_{i}"):
+                                add_lead(lead)
+                                added_blocked.add(i)
+                                st.session_state["added_blocked"] = added_blocked
                                 st.rerun()
                     st.divider()
 
